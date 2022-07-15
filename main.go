@@ -23,7 +23,7 @@ const Version = "dev"
 
 // top level for easier testing
 var bindAddress = flag.StringP("bind", "b", "127.0.0.1:8081", "address:port to bind webserver")
-var iptablesPath = flag.StringP("iptables-bin", "i", "/usr/sbin/iptables", "Path to iptables")
+var iptablesPath = flag.StringP("iptables-bin", "i", "/sbin/iptables", "Path to iptables")
 var iptablesSavePath = flag.StringP("iptables-save-bin", "s", "/sbin/iptables-save", "Path to iptables-save")
 var clientIp = flag.StringP("client-ip", "c", "192.168.0.222", "Client IP that should be redirected")
 var ipHeader = flag.StringP("ip-header", "x", "", "header for user IP, such as X-Real-IP or X-Forwarded-For - this is NOT used for security, it's only for displaying remote IP in the UI")
