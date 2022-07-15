@@ -36,6 +36,7 @@ func waitForIt(t *testing.T) {
 func setupTest(t *testing.T) {
 	*clientIp = "1.2.3.4"
 	*bindAddress = "127.0.0.1:9999"
+	*ipHeader = "x-real-ip"
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal("unable to get current dir")
@@ -149,6 +150,52 @@ func TestAPIReadSomething(t *testing.T) {
 	}
 }
 
+func TestAPIReadIpHeader(t *testing.T) {
+	setupTest(t)
+	go runIt()
+	waitForIt(t)
+
+	req, err := http.NewRequest("GET", "http://127.0.0.1:9999/api/config", nil)
+	if err != nil {
+		t.Fatalf("req: %v", err)
+	}
+	req.Header.Add("x-real-ip", "1.1.1.1")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get failed: %v", err)
+	}
+	if r.StatusCode != 200 {
+		t.Fatalf("StatusCode unexpected: %v", r.StatusCode)
+	}
+	rs, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if string(rs) != `{"Config":null,"YourIP":"1.1.1.1"}` {
+		t.Fatalf("response unexpected: %v", string(rs))
+	}
+
+	req, err = http.NewRequest("GET", "http://127.0.0.1:9999/api/config", nil)
+	if err != nil {
+		t.Fatalf("req: %v", err)
+	}
+	req.Header.Add("x-real-ip", "1.1.1.1,2.2.2.2")
+	r, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get failed: %v", err)
+	}
+	if r.StatusCode != 200 {
+		t.Fatalf("StatusCode unexpected: %v", r.StatusCode)
+	}
+	rs, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if string(rs) != `{"Config":null,"YourIP":"1.1.1.1"}` {
+		t.Fatalf("response unexpected: %v", string(rs))
+	}
+}
+
 func TestAPIUpdateFailNoHeader(t *testing.T) {
 	setupTest(t)
 	go runIt()
@@ -196,6 +243,40 @@ func TestAPIUpdate(t *testing.T) {
 		t.Fatalf("readIptables: %v", err)
 	}
 	if !s.Equal(&Config{Ip: net.IPv4(1, 1, 1, 1), Port: 8080}) {
+		t.Fatalf("readIptables unexpected: %v", s)
+	}
+}
+
+func TestAPIDisable(t *testing.T) {
+	setupTest(t)
+	go runIt()
+	waitForIt(t)
+
+	testConfig := Config{Ip: net.IPv4(12, 12, 12, 12), Port: 8080}
+	err := writeIptables(&testConfig)
+	if err != nil {
+		t.Fatalf("writeIptables: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "http://127.0.0.1:9999/api/config", strings.NewReader(`null`))
+	if err != nil {
+		t.Fatalf("req: %v", err)
+	}
+	req.Header.Add("content-type", "application/json")
+	req.Header.Add("X-Requested-With", "XMLHttpRequest")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("post failed: %v", err)
+	}
+	if r.StatusCode != 200 {
+		t.Fatalf("StatusCode unexpected: %v", r.StatusCode)
+	}
+	// data should WAS changed!
+	s, err := readIptables()
+	if err != nil {
+		t.Fatalf("readIptables: %v", err)
+	}
+	if s != nil {
 		t.Fatalf("readIptables unexpected: %v", s)
 	}
 }

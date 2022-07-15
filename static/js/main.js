@@ -1,11 +1,15 @@
 function checkStatus() {
     $.getJSON('api/config', function(jd) {
         console.log(jd);
-        $('#my-ip-input').val(jd.ClientIP);
-        $('#current-config').text(`Redirecting to ${jd.Ip}:${jd.Port}`);
-        if ($('#proxy-ip-input').val() === "") {
-            $('#proxy-ip-input').val(jd.Ip);
-            $('#proxy-port-input').val(jd.Port);
+        $('#my-ip-input').val(jd.YourIP);
+        if (jd.Config == null) {
+            $('#current-config').text(`Disabled`);
+        } else {
+            $('#current-config').text(`Redirecting to ${jd.Config.Ip}:${jd.Config.Port}`);
+            if ($('#proxy-ip-input').val() === "") {
+                $('#proxy-ip-input').val(jd.Config.Ip);
+                $('#proxy-port-input').val(jd.Config.Port);
+            }
         }
     }).fail(function(r) {
         alert("Error " + r.status + ": " + r.responseText);
@@ -27,12 +31,24 @@ $(function(){
             }),
             contentType: 'application/json',
             type: 'POST',
+        }).done(function(){
+            checkStatus()
         }).fail(function(r) {
             alert("Error " + r.status + ": " + r.responseText);
         });
     });
 
-    $('#disable-button').click(checkStatus);
+    $('#disable-button').click(function(){
+        $.ajax('api/config', {
+            data: "null",
+            contentType: 'application/json',
+            type: 'POST',
+        }).done(function(){
+            checkStatus()
+        }).fail(function(r) {
+            alert("Error " + r.status + ": " + r.responseText);
+        });
+    });
 
     checkStatus();
 })

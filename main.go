@@ -24,6 +24,7 @@ var bindAddress = flag.StringP("bind", "b", "127.0.0.1:8081", "address:port to b
 var iptablesPath = flag.StringP("iptables-bin", "i", "/usr/sbin/iptables", "Path to iptables")
 var iptablesSavePath = flag.StringP("iptables-save-bin", "s", "/sbin/iptables-save", "Path to iptables-save")
 var clientIp = flag.StringP("client-ip", "c", "192.168.0.222", "Client IP that should be redirected")
+var ipHeader = flag.StringP("ip-header", "x", "", "header for user IP, such as X-Real-IP or X-Forwarded-For - this is NOT used for security, it's only for displaying remote IP in the UI")
 
 var iptablesParser = regexp.MustCompile(`-A PREROUTING -s (\d+\.\d+\.\d+\.\d+)/32 -p tcp -m tcp --dport (\d+) -j DNAT --to-destination (\d+\.\d+\.\d+\.\d+):(\d+)`)
 
@@ -48,7 +49,15 @@ func (c *Config) Equal(other *Config) bool {
 	return c.Ip.Equal(other.Ip) && (c.Port == other.Port)
 }
 
+func (c *Config) IsEmpty() bool {
+	return c.Ip == nil && c.Port == 0
+}
+
 func writeIptables(c *Config) error {
+	if c.IsEmpty() {
+		// do nothing
+		return nil
+	}
 	// iptables -t nat -A PREROUTING -p tcp -s $sip --dport $dport -j DNAT --to-destination $dest
 	for _, port := range []string{"80", "443", "8080"} {
 		cmd := exec.Command(*iptablesPath, "-t", "nat", "-A", "PREROUTING", "-p", "tcp", "-s", *clientIp, "--dport", port, "-j", "DNAT", "--to-destination", c.IpPort())
@@ -127,7 +136,14 @@ func runIt() error {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			c, err := json.Marshal(map[string]interface{}{"Config": config, "YourIP": strings.Split(r.RemoteAddr, ":")[0]})
+			remoteIp := strings.Split(r.RemoteAddr, ":")[0]
+			if *ipHeader != "" {
+				ipValue := r.Header.Get(*ipHeader)
+				if ipValue != "" {
+					remoteIp = strings.Split(ipValue, ",")[0]
+				}
+			}
+			c, err := json.Marshal(map[string]interface{}{"Config": config, "YourIP": remoteIp})
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
@@ -148,13 +164,13 @@ func runIt() error {
 				http.Error(w, err.Error(), 500)
 				return
 			}
+			clearIptables()
 			var c Config
 			err = json.Unmarshal(body, &c)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			clearIptables()
 			writeIptables(&c)
 		default:
 			http.Error(w, "Method not allowed", 405)
